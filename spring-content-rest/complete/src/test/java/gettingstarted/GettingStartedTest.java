@@ -9,6 +9,7 @@ import static com.jayway.restassured.RestAssured.given;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
+import com.jayway.restassured.http.ContentType;
 import java.io.ByteArrayInputStream;
 import java.util.Optional;
 
@@ -49,27 +50,37 @@ public class GettingStartedTest {
             		f.setSummary("test file summary");
             		file = fileRepo.save(f);
         		});
-        		
-        		It("should be able to associate content with the Entity", () -> {
-        			Long fid = file.getId();
+
+
+                It("should be able to associate content with the entity, using the 'content' link-rel href", () -> {
+                    Long fid = file.getId();
+
+                    // figure out where we should actually upload the file
+                    String linkRelContent = given()
+                            .accept(ContentType.JSON)
+                            .get("/files/" + fid)
+                            .then()
+                            .log().all()
+                            .statusCode(HttpStatus.SC_OK)
+                            .extract().body().path("_links.content.href");
 
         	    	given()
         	    		.multiPart("file", "file", new ByteArrayInputStream("This is plain text content!".getBytes()), "text/plain")
         		    .when()
-        		        .put("/files/" + fid)
+        		        .put(linkRelContent)
         		    .then()
         		    	.statusCode(HttpStatus.SC_CREATED);
-                	    	
+
         	    	Optional<File> file = fileRepo.findById(fid);
         	    	assertThat(IOUtils.toString(fileContentStore.getContent(file.get())), is("This is plain text content!"));
         		});
-        		
+
         		Context("with existing content", () -> {
         			BeforeEach(() -> {
         				fileContentStore.setContent(file, new ByteArrayInputStream("Existing content".getBytes()));
         				fileRepo.save(file);
         			});
-        			
+
         			It("should return the content", () -> {
         		    	given()
         		    		.header("accept", "text/plain")
